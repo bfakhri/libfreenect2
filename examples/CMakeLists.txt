@@ -77,8 +77,10 @@ ADD_EXECUTABLE(Protonect
   ${Protonect_src}
 )
 
+FIND_PACKAGE(OpenCV REQUIRED)
 TARGET_LINK_LIBRARIES(Protonect
   ${Protonect_LIBRARIES}
+  ${OpenCV_LIBS}
 )
 
 IF(WIN32)

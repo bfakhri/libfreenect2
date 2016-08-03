@@ -30,6 +30,12 @@
 #include <cstdlib>
 #include <signal.h>
 
+// OpenCV Headers
+#include "opencv2/objdetect.hpp"
+#include "opencv2/videoio.hpp"
+#include "opencv2/highgui.hpp"
+#include "opencv2/imgproc.hpp"
+
 /// [headers]
 #include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/frame_listener_impl.h>
@@ -41,6 +47,8 @@
 #include "viewer.h"
 #endif
 
+using namespace std;
+using namespace cv;
 
 bool protonect_shutdown = false; ///< Whether the running application should shut down.
 
@@ -107,9 +115,26 @@ public:
  * - <number> Serial number of the device to open.
  * - -noviewer Disable viewer window.
  */
+/** Function Headers */
+void detectAndDisplay( Mat frame );
+
+/** Global variables */
+String face_cascade_name = "haarcascade_frontalface_alt.xml";
+String eyes_cascade_name = "haarcascade_eye_tree_eyeglasses.xml";
+CascadeClassifier face_cascade;
+CascadeClassifier eyes_cascade;
+String window_name = "Capture - Face detection";
+
 int main(int argc, char *argv[])
 /// [main]
 {
+  // Init opencv face detection stuff
+    //-- 1. Load the cascades
+  if( !face_cascade.load( face_cascade_name ) ){ printf("--(!)Error loading face cascade\n"); return -1; };
+  if( !eyes_cascade.load( eyes_cascade_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
+  namedWindow( window_name, WINDOW_AUTOSIZE );// Create a window for display.
+
+  
   std::string program_path(argv[0]);
   std::cerr << "Version: " << LIBFREENECT2_VERSION << std::endl;
   std::cerr << "Environment variables: LOGFILE=<protonect.log>" << std::endl;
@@ -338,6 +363,13 @@ int main(int argc, char *argv[])
     libfreenect2::Frame *rgb = frames[libfreenect2::Frame::Color];
     libfreenect2::Frame *ir = frames[libfreenect2::Frame::Ir];
     libfreenect2::Frame *depth = frames[libfreenect2::Frame::Depth];
+
+    cv::Mat rgbMat, irMat, depthMat;
+    cv::Mat(rgb->height, rgb->width, CV_8UC4, rgb->data).copyTo(rgbMat);
+    cv::Mat(ir->height, ir->width, CV_32FC1, ir->data).copyTo(irMat);
+    cv::Mat(depth->height, depth->width, CV_32FC1, depth->data).copyTo(depthMat);
+
+    detectAndDisplay(rgbMat);
 /// [loop start]
 
     if (enable_rgb && enable_depth)
@@ -391,3 +423,41 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+
+
+/** @function detectAndDisplay */
+void detectAndDisplay( Mat frame )
+{
+    std::vector<Rect> faces;
+    Mat frame_gray;
+
+    cvtColor( frame, frame_gray, COLOR_BGR2GRAY );
+    equalizeHist( frame_gray, frame_gray );
+
+    //-- Detect faces
+    face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|CASCADE_SCALE_IMAGE, Size(30, 30) );
+/*
+    for ( size_t i = 0; i < faces.size(); i++ )
+    {
+        Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
+	cout << "Face " << i << "\t" << center.x << "\t" << center.y << endl;
+        ellipse( frame, center, Size( faces[i].width/2, faces[i].height/2 ), 0, 0, 360, Scalar( 255, 0, 255 ), 4, 8, 0 );
+
+        Mat faceROI = frame_gray( faces[i] );
+        std::vector<Rect> eyes;
+
+        //-- In each face, detect eyes
+        eyes_cascade.detectMultiScale( faceROI, eyes, 1.1, 2, 0 |CASCADE_SCALE_IMAGE, Size(30, 30) );
+
+        for ( size_t j = 0; j < eyes.size(); j++ )
+        {
+            Point eye_center( faces[i].x + eyes[j].x + eyes[j].width/2, faces[i].y + eyes[j].y + eyes[j].height/2 );
+            int radius = cvRound( (eyes[j].width + eyes[j].height)*0.25 );
+            circle( frame, eye_center, radius, Scalar( 255, 0, 0 ), 4, 8, 0 );
+        }
+    }
+    //-- Show what you got
+    imshow( window_name, frame );
+*/
+}
+
