@@ -345,7 +345,7 @@ int main(int argc, char *argv[])
 
 /// [registration setup]
   libfreenect2::Registration* registration = new libfreenect2::Registration(dev->getIrCameraParams(), dev->getColorCameraParams());
-  libfreenect2::Frame undistorted(512, 424, 4), registered(512, 424, 4);
+  libfreenect2::Frame undistorted(512, 424, 4), registered(512, 424, 4), registeredView(512, 424, 4);
 /// [registration setup]
 
   size_t framecount = 0;
@@ -369,14 +369,14 @@ int main(int argc, char *argv[])
     libfreenect2::Frame *ir = frames[libfreenect2::Frame::Ir];
     libfreenect2::Frame *depth = frames[libfreenect2::Frame::Depth];
 
-    cv::Mat rgbMat, irMat, depthMat; 
+    cv::Mat rgbMat, irMat, depthMat, registeredMat; 
     cv::Mat(rgb->height, rgb->width, CV_8UC4, rgb->data).copyTo(rgbMat);
     cv::Mat(ir->height, ir->width, CV_32FC1, ir->data).copyTo(irMat);
     cv::Mat(depth->height, depth->width, CV_32FC1, depth->data).copyTo(depthMat);
 
-    detectAndDisplay(rgbMat, 1);
-    detectAndReturn(&rgbMat);
-    rgb->data = rgbMat.data;
+    //detectAndDisplay(rgbMat, 1);
+    //detectAndReturn(&rgbMat);
+    //rgb->data = rgbMat.data;
 
     //detectAndDisplay(irMat, 2);
     //detectAndDisplay(depthMat, 3);
@@ -386,6 +386,9 @@ int main(int argc, char *argv[])
     {
 /// [registration]
       registration->apply(rgb, depth, &undistorted, &registered);
+      cv::Mat(depth->height, depth->width, CV_8UC4, registered.data).copyTo(registeredMat);
+      detectAndReturn(&registeredMat);
+      registeredView.data = registeredMat.data;
 /// [registration]
     }
 
@@ -410,7 +413,7 @@ int main(int argc, char *argv[])
     }
     if (enable_rgb && enable_depth)
     {
-      viewer.addFrame("registered", &registered);
+      viewer.addFrame("registered", &registeredView);
     }
 
     protonect_shutdown = protonect_shutdown || viewer.render();
@@ -479,8 +482,6 @@ void detectAndReturn( Mat * frame )
     std::vector<Rect> faces;
     Mat frame_gray;
     Mat frame_black;
-
-    cout << sizeof(int);
 
     cvtColor( *frame, frame_gray, COLOR_BGR2GRAY );
     equalizeHist( frame_gray, frame_gray );
