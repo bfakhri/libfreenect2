@@ -29,6 +29,8 @@
 #include <iostream>
 #include <cstdlib>
 #include <signal.h>
+#include <string>
+#include <sstream>
 
 // OpenCV Headers
 #include "opencv2/objdetect.hpp"
@@ -116,7 +118,10 @@ public:
  * - -noviewer Disable viewer window.
  */
 /** Function Headers */
-void detectAndDisplay( Mat frame );
+void detectAndDisplay( Mat frame, int frame_id );
+void detectAndReturn( Mat *frame );
+template <typename T>
+std::string to_string(T value);
 
 /** Global variables */
 String face_cascade_name = "haarcascade_frontalface_alt.xml";
@@ -364,12 +369,17 @@ int main(int argc, char *argv[])
     libfreenect2::Frame *ir = frames[libfreenect2::Frame::Ir];
     libfreenect2::Frame *depth = frames[libfreenect2::Frame::Depth];
 
-    cv::Mat rgbMat, irMat, depthMat;
+    cv::Mat rgbMat, irMat, depthMat; 
     cv::Mat(rgb->height, rgb->width, CV_8UC4, rgb->data).copyTo(rgbMat);
     cv::Mat(ir->height, ir->width, CV_32FC1, ir->data).copyTo(irMat);
     cv::Mat(depth->height, depth->width, CV_32FC1, depth->data).copyTo(depthMat);
 
-    detectAndDisplay(rgbMat);
+    detectAndDisplay(rgbMat, 1);
+    detectAndReturn(&rgbMat);
+    rgb->data = rgbMat.data;
+
+    //detectAndDisplay(irMat, 2);
+    //detectAndDisplay(depthMat, 3);
 /// [loop start]
 
     if (enable_rgb && enable_depth)
@@ -426,7 +436,7 @@ int main(int argc, char *argv[])
 
 
 /** @function detectAndDisplay */
-void detectAndDisplay( Mat frame )
+void detectAndDisplay( Mat frame, int frame_id )
 {
     std::vector<Rect> faces;
     Mat frame_gray;
@@ -436,11 +446,11 @@ void detectAndDisplay( Mat frame )
 
     //-- Detect faces
     face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|CASCADE_SCALE_IMAGE, Size(30, 30) );
-/*
+
     for ( size_t i = 0; i < faces.size(); i++ )
     {
         Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
-	cout << "Face " << i << "\t" << center.x << "\t" << center.y << endl;
+	//cout << "Face " << i << "\t" << center.x << "\t" << center.y << endl;
         ellipse( frame, center, Size( faces[i].width/2, faces[i].height/2 ), 0, 0, 360, Scalar( 255, 0, 255 ), 4, 8, 0 );
 
         Mat faceROI = frame_gray( faces[i] );
@@ -458,6 +468,57 @@ void detectAndDisplay( Mat frame )
     }
     //-- Show what you got
     imshow( window_name, frame );
-*/
+
+    // WRite out to file
+    imwrite("./Image"+to_string(frame_id)+".jpg", frame); 
+}
+
+/** @function detectAndReturn */
+void detectAndReturn( Mat * frame )
+{
+    std::vector<Rect> faces;
+    Mat frame_gray;
+    Mat frame_black;
+
+    cout << sizeof(int);
+
+    cvtColor( *frame, frame_gray, COLOR_BGR2GRAY );
+    equalizeHist( frame_gray, frame_gray );
+
+    //-- Detect faces
+    face_cascade.detectMultiScale( frame_gray, faces, 1.1, 2, 0|CASCADE_SCALE_IMAGE, Size(30, 30) );
+
+    for ( size_t i = 0; i < faces.size(); i++ )
+    {
+        Point center( faces[i].x + faces[i].width/2, faces[i].y + faces[i].height/2 );
+	//cout << "Face " << i << "\t" << center.x << "\t" << center.y << endl;
+        ellipse( *frame, center, Size( faces[i].width/2, faces[i].height/2 ), 0, 0, 360, Scalar( 255, 0, 255 ), 4, 8, 0 );
+
+        Mat faceROI = frame_gray( faces[i] );
+        std::vector<Rect> eyes;
+
+        //-- In each face, detect eyes
+        eyes_cascade.detectMultiScale( faceROI, eyes, 1.1, 2, 0 |CASCADE_SCALE_IMAGE, Size(30, 30) );
+
+        for ( size_t j = 0; j < eyes.size(); j++ )
+        {
+            Point eye_center( faces[i].x + eyes[j].x + eyes[j].width/2, faces[i].y + eyes[j].y + eyes[j].height/2 );
+            int radius = cvRound( (eyes[j].width + eyes[j].height)*0.25 );
+            circle( *frame, eye_center, radius, Scalar( 255, 0, 0 ), 4, 8, 0 );
+        }
+    }
+    //-- Show what you got
+    //imshow( window_name, frame );
+
+    // WRite out to file
+    //imwrite("./Image"+to_string(frame_id)+".jpg", frame); 
+}
+
+template <typename T>
+std::string to_string(T value)
+{
+	std::ostringstream os ;
+	os << value ;
+	return os.str() ;
 }
 
