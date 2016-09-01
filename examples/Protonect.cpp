@@ -31,6 +31,9 @@
 #include <signal.h>
 #include <string>
 #include <sstream>
+#include <sys/types.h>
+#include <sys/ipc.h> 
+#include <sys/shm.h> 
 
 // OpenCV Headers
 #include "opencv2/objdetect.hpp"
@@ -49,10 +52,18 @@
 #include "viewer.h"
 #endif
 
+#define SHMSZ 27 
+
 using namespace std;
 using namespace cv;
 
 bool protonect_shutdown = false; ///< Whether the running application should shut down.
+
+key_t key = 85991;	/* key to be passed to shmget() */ 
+int shmflg; 		/* shmflg to be passed to shmget() */ 
+int shmid; 		/* return value from shmget() */ 
+int size; 		/* size to be passed to shmget() */
+void *shm;	
 
 void sigint_handler(int s)
 {
@@ -119,7 +130,7 @@ public:
  */
 /** Function Headers */
 void detectAndDisplay( Mat frame, int frame_id );
-void detectAndReturn( Mat *frame );
+void detectAndReturn( Mat *frame, int frame_id );
 template <typename T>
 std::string to_string(T value);
 
@@ -133,8 +144,42 @@ String window_name = "Capture - Face detection";
 int main(int argc, char *argv[])
 /// [main]
 {
+  // Create Shared Segment
+  if ((shmid = shmget(key, SHMSZ, IPC_CREAT | 0666)) < 0) {
+        perror("shmget");
+        exit(1);
+  }
+  // Attach to the segment
+  if ((shm = shmat(shmid, NULL, 0)) == (char *) -1) {
+      perror("shmat");
+      exit(1);
+  }
+  // Do something to the segment
+  volatile void* shared = shm;
+
+  // Set shared to false
+  (*(uint8_t*)shared) = 0;
+
+  uint8_t mystate = 0x00; 
+  // Test loop
+  /*
+  while(1){
+    cout << (int)*((uint8_t*)shared) << endl;
+    //if(*((uint8_t*)shared) == 0x00)
+    if((*((uint8_t*)shared)) != mystate){
+      if(mystate == 0x00)
+        mystate = 0xFF;
+      else
+        mystate = 0x00;
+
+      for(int i=0; i<100000; i++)
+        cout << "Ping" << endl;
+    }
+  }
+  */
+
   // Init opencv face detection stuff
-    //-- 1. Load the cascades
+  //-- 1. Load the cascades
   if( !face_cascade.load( face_cascade_name ) ){ printf("--(!)Error loading face cascade\n"); return -1; };
   if( !eyes_cascade.load( eyes_cascade_name ) ){ printf("--(!)Error loading eyes cascade\n"); return -1; };
   namedWindow( window_name, WINDOW_AUTOSIZE );// Create a window for display.
@@ -387,7 +432,7 @@ int main(int argc, char *argv[])
 /// [registration]
       registration->apply(rgb, depth, &undistorted, &registered);
       cv::Mat(depth->height, depth->width, CV_8UC4, registered.data).copyTo(registeredMat);
-      detectAndReturn(&registeredMat);
+      //detectAndReturn(&registeredMat);
       registeredView.data = registeredMat.data;
 /// [registration]
     }
@@ -405,6 +450,16 @@ int main(int argc, char *argv[])
     if (enable_rgb)
     {
       viewer.addFrame("RGB", rgb);
+      //detectAndDisplay(&rgbMat);
+      cout << (int)*((uint8_t*)shared) << endl;
+      //if(*((uint8_t*)shared) == 0x00)
+      if((*((uint8_t*)shared)) != mystate){
+        detectAndReturn(&rgbMat, framecount);
+        if(mystate == 0x00)
+          mystate = 0xFF;
+        else
+          mystate = 0x00;
+      }
     }
     if (enable_depth)
     {
@@ -470,14 +525,14 @@ void detectAndDisplay( Mat frame, int frame_id )
         }
     }
     //-- Show what you got
-    imshow( window_name, frame );
+    //imshow( window_name, frame );
 
     // WRite out to file
     imwrite("./Image"+to_string(frame_id)+".jpg", frame); 
 }
 
 /** @function detectAndReturn */
-void detectAndReturn( Mat * frame )
+void detectAndReturn( Mat * frame , int frame_id)
 {
     std::vector<Rect> faces;
     Mat frame_gray;
@@ -512,7 +567,7 @@ void detectAndReturn( Mat * frame )
     //imshow( window_name, frame );
 
     // WRite out to file
-    //imwrite("./Image"+to_string(frame_id)+".jpg", frame); 
+    imwrite("./Image"+to_string(frame_id)+".jpg", *frame); 
 }
 
 template <typename T>

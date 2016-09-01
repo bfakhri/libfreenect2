@@ -2,11 +2,16 @@
 #include "opencv2/videoio.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 #include <iostream>
 #include <stdio.h>
 #include <vector>
 #include <time.h>
+
+#define SHMSZ 27
 
 using namespace std;
 using namespace cv;
@@ -15,11 +20,15 @@ using namespace cv;
 void detectAndDisplay( Mat frame );
 
 /** Global variables */
-String window_name = "Draw";
+String window_name = "EyeGazer";
 
 // Resolution of the screen we are using
-const int X_RES = 1680;
-const int Y_RES = 1050;
+//const int X_RES = 1680;
+//const int Y_RES = 1050;
+const int X_RES = 1280;
+const int Y_RES = 720;
+//const int X_RES = 1920;
+//const int Y_RES = 1080;
 // Number of sections per axis we are targeting 
 const float X_SEG = 10;
 const float Y_SEG = 10;
@@ -30,9 +39,46 @@ const long NS_TILL_COLLAPSE = 2e9;
 // Initial bubble radius
 const int INIT_RAD = 100;
 
+
+key_t key = 85991;	/* key to be passed to shmget() */ 
+int shmflg; /* shmflg to be passed to shmget() */ 
+int shmid; /* return value from shmget() */ 
+int size; /* size to be passed to shmget() */
+void *shm, *shared;	
+
 /** @function main */
 int main( void )
 {
+	// Create Shared Segment
+	if ((shmid = shmget(key, SHMSZ, 0666)) < 0) {
+	      perror("shmget");
+	      exit(1);
+	}
+	// Attach to the segment
+	if ((shm = shmat(shmid, NULL, 0)) == (char *) -1) {
+	    perror("shmat");
+	    exit(1);
+	}
+	// Do something to the segment
+	shared = shm;
+
+	int t;
+	// Test loop
+	/*
+	while(1){
+		cin >> t;
+		cout << "Value: " << *((uint8_t*)shared) << endl;
+		//*((uint8_t*)shared) = 0xFF;
+		if(*((uint8_t*)shared) == 0x00)
+			*((uint8_t*)shared) = 0xFF;	
+		else	
+			*((uint8_t*)shared) = 0x00;	
+		
+		cout << "Value: " << *((uint8_t*)shared) << endl;
+		
+	}
+	*/
+
 	Mat frame = Mat(Y_RES, X_RES, CV_8UC3, Scalar::all(0));
 	imshow( window_name, frame ); 
 
@@ -83,6 +129,10 @@ int main( void )
 					all_points.pop_back();
 					cout << "Success:\t(" << all_points.back().x << "," << all_points.back().y << ")\t" << all_points.size() << " left" << endl;
 					// Capture frame of person's face
+					if(*((uint8_t*)shared) == 0x00)
+						*((uint8_t*)shared) = 0xFF;	
+					else	
+						*((uint8_t*)shared) = 0x00;	
 				}else{
 					// Failed shot - put this one back into queue
 					all_points.insert(all_points.begin(), all_points.back());
